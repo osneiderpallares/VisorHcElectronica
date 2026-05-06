@@ -5,14 +5,12 @@
 // ============================================================================
 // 1. CONFIGURACIÓN Y CONSTANTES
 // ============================================================================
-import dotenv from "dotenv";
-dotenv.config();
 
 const CONFIG = {
   clientId: '', 
   clientSecret: '', 
   subscriptionKey: '', 
-  apiBaseUrl: process.env.API_BASE_URL
+  apiBaseUrl: 'http://localhost:3001/api',
 };
 
 const ROLES_ORG = {
