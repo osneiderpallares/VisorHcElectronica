@@ -314,6 +314,20 @@
         });
     </script>
 
+    <script>
+        window.onload = function() {
+            // Obtener parámetros de la URL
+            const params = new URLSearchParams(window.location.search);
+            const documento = params.get("documento");
+
+            // Asignar al campo inputDocumento si existe
+            if (documento) {
+            document.getElementById("inputDocumento").value = documento;
+            }
+        };
+    </script>
+
+
     <script src="https://cdn.datatables.net/v/bs5/dt-2.0.8/datatables.min.js"></script>
     <script src="/consultas_rda.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
