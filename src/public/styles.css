@@ -1,0 +1,324 @@
+:root {
+    --minsalud-blue: #3366CC;
+    --minsalud-dark-blue: #1E3A8A;
+    --minsalud-light-blue: #E8F0FE;
+    --success-green: #10B981;
+    --warning-orange: #F59E0B;
+    --danger-red: #EF4444;
+}
+
+* {
+    font-family: 'Work Sans', sans-serif;
+}
+
+html, body {
+    height: 100%;
+    margin: 0;
+}
+
+/* ✅ FONDO DE IMAGEN PARA TODO EL SITIO */
+body {
+    background-image: url('https://www.minsalud.gov.co/ihce/PublishingImages/Inicio-01.jpg');
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Overlay semi-transparente para mejorar legibilidad */
+
+
+.main-wrapper {
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.content-wrapper {
+    flex: 1 0 auto;
+}
+
+/* Header mejorado */
+.header-govco {
+    background: var(--minsalud-blue);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.logo-container {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 1.5rem 0;
+    border-bottom: 3px solid var(--minsalud-blue);
+    backdrop-filter: blur(10px);
+}
+
+.logo-container img {
+    max-height: 100px;
+    transition: transform 0.3s ease;
+}
+
+.logo-container img:hover {
+    transform: scale(1.05);
+}
+
+/* Container principal */ 
+.main-container {
+    max-width: 1200px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+/* Cards mejorados con transparencia */
+.card-custom {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+}
+
+.card-custom:hover {
+    box-shadow: 0 8px 15px rgba(0, 0, 0, 0.12);
+    transform: translateY(-2px);
+}
+
+/* Accordion mejorado */
+.accordion-button {
+    background: rgba(255, 255, 255, 0.95);
+    color: #1f2937;
+    font-weight: 600;
+    font-size: 1.05rem;
+    padding: 1.25rem 1.5rem;
+    border: none;
+    transition: all 0.3s ease;
+}
+
+.accordion-button:not(.collapsed) {
+    background: linear-gradient(135deg, var(--minsalud-blue) 0%, var(--minsalud-dark-blue) 100%);
+    color: white;
+    box-shadow: none;
+}
+
+.accordion-button:focus {
+    box-shadow: 0 0 0 0.25rem rgba(51, 102, 204, 0.25);
+}
+
+.accordion-button::after {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='%23374151'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
+}
+
+.accordion-button:not(.collapsed)::after {
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='white'%3e%3cpath fill-rule='evenodd' d='M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z'/%3e%3c/svg%3e");
+}
+
+.accordion-item {
+    border: none;
+    margin-bottom: 1rem;
+    border-radius: 12px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    backdrop-filter: blur(10px);
+}
+
+.accordion-body {
+    padding: 1.5rem;
+    background: rgba(255, 255, 255, 0.95);
+}
+
+/* Iconos mejorados */
+.icon-style {
+    margin-right: 0.75rem;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.1));
+}
+
+/* Badges mejorados */
+.badge {
+    padding: 0.5rem 0.75rem;
+    font-weight: 600;
+    border-radius: 20px;
+    font-size: 0.85rem;
+}
+
+.badge.bg-success {
+    background: var(--success-green) !important;
+}
+
+.badge.bg-info {
+    background: var(--minsalud-blue) !important;
+}
+
+.badge.bg-primary {
+    background: var(--minsalud-dark-blue) !important;
+}
+
+/* Formulario mejorado */
+.form-label {
+    font-weight: 600;
+    color: #374151;
+    margin-bottom: 0.5rem;
+}
+
+.form-control, .form-select {
+    border: 2px solid #E5E7EB;
+    border-radius: 8px;
+    padding: 0.65rem 1rem;
+    transition: all 0.3s ease;
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--minsalud-blue);
+    box-shadow: 0 0 0 0.2rem rgba(51, 102, 204, 0.15);
+    background: white;
+}
+
+/* Botones mejorados */
+.btn {
+    padding: 0.65rem 1.5rem;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    border: none;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--minsalud-blue) 0%, var(--minsalud-dark-blue) 100%);
+    box-shadow: 0 4px 6px rgba(51, 102, 204, 0.2);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(51, 102, 204, 0.3);
+}
+
+.btn-outline-secondary {
+    border: 2px solid #D1D5DB;
+    color: #6B7280;
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.btn-outline-secondary:hover {
+    background: #F3F4F6;
+    border-color: #9CA3AF;
+    color: #374151;
+}
+
+/* Tablas mejoradas */
+.table {
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.table thead {
+    background: linear-gradient(135deg, var(--minsalud-blue) 0%, var(--minsalud-dark-blue) 100%);
+    color: white;
+}
+
+.table tbody tr {
+    transition: all 0.2s ease;
+}
+
+.table tbody tr:hover {
+    background: var(--minsalud-light-blue);
+    transform: scale(1.01);
+    cursor: pointer;
+}
+
+/* Switch mejorado */
+.form-check-input:checked {
+    background-color: var(--minsalud-blue);
+    border-color: var(--minsalud-blue);
+}
+
+/* Footer mejorado */
+.footer-govco {
+    flex-shrink: 0;
+    background: rgba(51, 102, 204, 0.95);
+    padding: 1.5rem 0;
+    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+    width: 100%;
+    backdrop-filter: blur(10px);
+}
+
+/* Modal mejorado */
+.modal-content {
+    border-radius: 12px;
+    border: none;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+    background: rgba(255, 255, 255, 0.98);
+}
+
+.modal-header {
+    background: linear-gradient(135deg, var(--minsalud-blue) 0%, var(--minsalud-dark-blue) 100%);
+    color: white;
+    border-radius: 12px 12px 0 0;
+    padding: 1.5rem;
+}
+
+/* Alertas personalizadas */
+.alert {
+    border-radius: 8px;
+    border: none;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.alert-info {
+    background: rgba(232, 240, 254, 0.95);
+    color: var(--minsalud-dark-blue);
+}
+
+/* Animación de carga */
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+    border-width: 0.3em;
+}
+
+/* Paginación mejorada */
+#paginacion .btn, #paginacionEncuentros .btn {
+    margin: 0.25rem;
+    border-radius: 8px;
+    min-width: 120px;
+}
+
+/* Scroll personalizado */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(241, 241, 241, 0.8);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--minsalud-blue);
+    border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--minsalud-dark-blue);
+}
+
+/* Ajustes responsivos */
+@media (max-width: 768px) {
+    .main-container {
+        padding: 0 0.5rem;
+    }
+
+    .accordion-button {
+        font-size: 0.95rem;
+        padding: 1rem;
+    }
+
+    .logo-container img {
+        max-height: 70px;
+    }
+}
