@@ -1,6 +1,8 @@
 :root {
-    --minsalud-blue: #3366CC;
-    --minsalud-dark-blue: #1E3A8A;
+    /* --minsalud-blue: #3366CC; */
+    --minsalud-blue: #aec9d3;
+    /* --minsalud-dark-blue: #1E3A8A; */
+    --minsalud-dark-blue: #2596be;
     --minsalud-light-blue: #E8F0FE;
     --success-green: #10B981;
     --warning-orange: #F59E0B;
@@ -18,7 +20,8 @@ html, body {
 
 /* ✅ FONDO DE IMAGEN PARA TODO EL SITIO */
 body {
-    background-image: url('https://www.minsalud.gov.co/ihce/PublishingImages/Inicio-01.jpg');
+    /* background-image: url('https://www.minsalud.gov.co/ihce/PublishingImages/Inicio-01.jpg'); */
+    background-color: #e9edee;
     background-size: cover;
     background-position: center;
     background-attachment: fixed;
@@ -239,7 +242,7 @@ body {
 /* Footer mejorado */
 .footer-govco {
     flex-shrink: 0;
-    background: rgba(51, 102, 204, 0.95);
+    background: #aec9d3;
     padding: 1.5rem 0;
     box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
     width: 100%;
