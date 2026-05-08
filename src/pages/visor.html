@@ -322,10 +322,14 @@
             // Obtener parámetros de la URL
             const params = new URLSearchParams(window.location.search);
             const documento = params.get("documento");
+            const tipoDocumento = params.get("tipoDocumento");
 
             // Asignar al campo inputDocumento si existe
-            if (documento) {
+            if (documento && tipoDocumento) {
             document.getElementById("inputDocumento").value = documento;
+            
+            const selectTipo = document.getElementById("inputTipoDocumento");
+            selectTipo.value = tipoDocumento;
             }
         };
     </script>
