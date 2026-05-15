@@ -333,34 +333,12 @@ const APIService = {
       })
     });
 
-    // let data = null;
-    // try {
-    //   data = await resp.json();
-    // } catch (e) {
-    //   throw new Error('Error parseando respuesta del servidor');
-    // }
-    
-
-    const raw = await resp.text(); // siempre captura la respuesta cruda
     let data = null;
-
-    // Validar si realmente es JSON
-    const contentType = resp.headers.get('content-type') || '';
-    if (contentType.includes('application/json')) {
-      try {
-        data = JSON.parse(raw);
-      } catch (e) {
-        throw new Error(`Error parseando JSON: ${e.message}`);
-      }
-    } else {
-      // No es JSON, devolver texto plano
-      throw new Error(`Respuesta no es JSON: ${raw}`);
+    try {
+      data = await resp.json();
+    } catch (e) {
+      throw new Error('Error parseando respuesta del servidor');
     }
-
-    if (!resp.ok) {
-      throw new Error(data?.error || data?.message || raw || `HTTP ${resp.status}`);
-    }
-
 
     // Manejar OperationOutcome
     let operationOutcome = null;
