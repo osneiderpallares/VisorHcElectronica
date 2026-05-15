@@ -282,7 +282,7 @@ const APIService = {
       parametros.payload.parameter.push({ name: 'fechaDesde', valueDate: fechaDesde });
     }
 
-    console.log('📤 Parámetros enviados:', parametros);
+    // console.log('📤 Parámetros enviados:', parametros);
 
     const response = await fetch(`${CONFIG.apiBaseUrl}/composition`, {
       method: 'POST',
@@ -339,8 +339,8 @@ const APIService = {
     } catch (e) {
       throw new Error('Error parseando respuesta del servidor');
     }
+    
 
-   
 
     // Manejar OperationOutcome
     let operationOutcome = null;
@@ -404,7 +404,7 @@ const APIService = {
     CONFIG.clientId = CONFI.datos.CLIENTE_ID;
     CONFIG.clientSecret = CONFI.datos.CLIENTE_SECRET;
     CONFIG.subscriptionKey = CONFI.datos.SUBSCRIPTIONKEY;
-    console.log('✅ CONFIG cargado:', CONFI.datos);
+    // console.log('✅ CONFIG cargado:', CONFI.datos);
   },
 };
 
