@@ -89,7 +89,7 @@ router.get('/composition/pagina', async (req, res) => {
             return res.status(400).json({ error: 'URL es requerida' });
         }
 
-        console.log('📄 Obteniendo página:', url);
+        // console.log('📄 Obteniendo página:', url);
 
         const token = await httpsAgent.getAccessToken(clientId, clientSecret);
         const response = await httpsAgent.authenticatedRequest(url, token, subscriptionKey);

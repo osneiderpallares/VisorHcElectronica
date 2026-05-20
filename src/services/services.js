@@ -9,7 +9,7 @@ class FHIRService {
             prod: 'https://sandbox.ihcecol.gov.co/ihce',
             dev: 'https://dev-fevrips.sispro.gov.co/ihce-ahds'
         };
-        this.baseUrl = this.baseUrls.dev; // Default a producción
+        this.baseUrl = this.baseUrls.prod; // Default a producción
     }
 
 }

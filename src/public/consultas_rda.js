@@ -402,8 +402,36 @@ const APIService = {
     CONFIG.clientId = CONFI.datos.CLIENTE_ID;
     CONFIG.clientSecret = CONFI.datos.CLIENTE_SECRET;
     CONFIG.subscriptionKey = CONFI.datos.SUBSCRIPTIONKEY;
-    // console.log('✅ CONFIG cargado:', CONFI.datos);
   },
+  // console.log('✅ CONFIG cargado:', CONFI.datos);
+
+  // ─── NUEVO: obtener PDF desde ruta FHIR ────────────────────────────────────
+  async obtenerPDF(rutaDocumento) {
+    // Extraer el ID dinámico del DocumentReference
+    const match = rutaDocumento.match(/DocumentReference\/([^/]+)/);
+    if (!match) {
+      throw new Error('No se pudo extraer el ID del DocumentReference de la ruta: ' + rutaDocumento);
+    }
+    const docId = match[1];
+
+    const url =
+      `${CONFIG.apiBaseUrl}/DocumentReference/${docId}/0/descargar-rda-epicrisis` +
+      `?clientId=${encodeURIComponent(CONFIG.clientId)}` +
+      `&clientSecret=${encodeURIComponent(CONFIG.clientSecret)}` +
+      `&subscriptionKey=${encodeURIComponent(CONFIG.subscriptionKey)}`;
+
+  
+
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Error ${response.status}: ${text}`);
+    }
+
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  }
 };
 
 // ============================================================================
@@ -1789,7 +1817,8 @@ const UIRenderers = {
           <th>Formato</th>
           <th>Región</th>
           <th>Autor</th>
-          <th>Fecha Bundle</th>
+          <th>Fecha</th>
+          <th>Epicrisis / PDF</th>
           <th>Origen</th>
         </tr>
       </thead>
@@ -1800,19 +1829,59 @@ const UIRenderers = {
 
     entries.forEach((entry, index) => {
       const r = entry?.resource;
-      if (!r || r.resourceType !== 'Composition') return;
+      if (!r) return;
 
-      const origen = entry._source || 'desconocido';
-      const origenLabel = entry._sourceLabel || 'No especificado';
-      const badgeColor = origen === 'rda-paciente' ? 'bg-primary' : 'bg-success';
-      const badgeIcon = origen === 'rda-paciente' ? '👤' : '🏥';
-      const badgeText = origen === 'rda-paciente' ? 'Paciente' : 'Encuentros';
+      const compositionId = r.id;
+
+      let urlPDF = '';
+
+      // === BÚSQUEDA POR REFERENCIA DENTRO DE LA COMPOSITION ===
+      const docRef = refs.documentReferences.find(doc => {
+        const url = Utils.getText(doc?.content?.[0]?.attachment?.url);
+        if (!url) return false;
+
+        // 1. Referencia directa en section.entry de la Composition
+        const hasDirectRef = Utils.safeArray(r.section).some(section =>
+          Utils.safeArray(section?.entry).some(e => {
+            const ref = Utils.getText(e?.reference);
+            return ref.includes(doc.id) || doc.id.includes(ref);
+          })
+        );
+
+        // 2. Match por Encounter (por si acaso)
+        const docEncounters = Utils.safeArray(doc?.context?.encounter);
+        const matchEncounter = docEncounters.some(enc => {
+          const dRef = Utils.getText(enc?.reference);
+          const eRef = Utils.getText(r?.encounter?.reference);
+          return dRef && eRef && (dRef.includes(eRef) || eRef.includes(dRef));
+        });
+
+        return hasDirectRef || matchEncounter || doc.id === compositionId;
+      });
+
+      if (docRef) {
+        urlPDF = Utils.getText(docRef?.content?.[0]?.attachment?.url);
+      }
+
+      let botonPDF = '<span class="text-muted small">—</span>';
+
+      if (urlPDF) {
+        const esFHIR = urlPDF.includes('/DocumentReference/') || urlPDF.includes('/descargar-rda');
+
+        if (esFHIR) {
+          botonPDF = `
+            <button class="btn btn-sm btn-danger"
+                    onclick="event.stopPropagation(); PDFViewerService.mostrar('${urlPDF.replace(/'/g, "\\'")}')"
+                    title="Ver PDF">
+              <i class="bx bxs-file-pdf"></i>
+            </button>`;
+        }
+      }
 
       const org = AppState.datosGlobalesFHIR ? 
         FHIRUtils.obtenerOrganizacionDelRDA(r, AppState.datosGlobalesFHIR) : null;
 
       const tr = document.createElement('tr');
-      tr.setAttribute('data-source', origen);
       tr.style.cursor = 'pointer';
       tr.innerHTML = `
         <td>${index + 1}</td>
@@ -1820,8 +1889,10 @@ const UIRenderers = {
         <td>${FHIRUtils.getRegionFromOrg(org)}</td>
         <td>${org?.name || 'N/A'}</td>
         <td>${r.date || r.meta?.lastUpdated || 'Sin fecha'}</td>
-        <td><span class="badge ${badgeColor}" title="${origenLabel}">${badgeIcon} ${badgeText}</span></td>
+        <td>${botonPDF}</td>
+        <td><span class="badge bg-success">Encuentros</span></td>
       `;
+
       tr.addEventListener('click', () => ModalService.mostrarDetalle(entry));
       tbody.appendChild(tr);
     });
@@ -2081,6 +2152,7 @@ const ModalService = {
       // Filtrar observations y riskAssessments:
       // 1) Por encounter.reference si existe
       // 2) Si no, por si están en refsIds (sections)
+      // Reemplaza las líneas de observations y agrega clarificationNotes:
       observations: refs.observations.filter(o => {
         // Si tiene encounter.reference, verificar que coincida
         const oEncRef = Utils.getText(o?.encounter?.reference);
@@ -2091,6 +2163,16 @@ const ModalService = {
           return normalizedOEnc === normalizedCurrentEnc;
         }
         // Si no tiene encounter, verificar si está en sections
+        return refsIds.has(o.id);
+      }),
+      clarificationNotes: refs.observations.filter(o => {
+        if (!o?.meta?.profile?.some(p => p.includes('ObservationClarificationNoteRDA'))) return false;
+        const oEncRef = Utils.getText(o?.encounter?.reference);
+        if (oEncRef) {
+          const normalizedOEnc = oEncRef.replace(/^#/, '').replace(/^.*\//, '');
+          const normalizedCurrentEnc = encounterRef.replace(/^#/, '').replace(/^.*\//, '');
+          return normalizedOEnc === normalizedCurrentEnc;
+        }
         return refsIds.has(o.id);
       }),
       riskAssessments: refs.riskAssessments.filter(r => {
@@ -2135,7 +2217,10 @@ const ModalService = {
     };
 
     // Construir HTML
-    const html = this.construirHTML(entry, enc, patientData, organizationsToShow, resources);
+    // Capturar secciones con emptyReason
+    const seccionesVacias = Utils.safeArray(r?.section).filter(sec => sec?.emptyReason);
+
+    const html = this.construirHTML(entry, enc, patientData, organizationsToShow, resources, seccionesVacias);
 
     // Mostrar modal
     const contModal = DOM.elements.modalContent;
@@ -2154,7 +2239,7 @@ const ModalService = {
     modal.show();
   },
 
-  construirHTML(entry, enc, patientData, organizations, resources) {
+  construirHTML(entry, enc, patientData, organizations, resources, seccionesVacias = []) {
     let html = `
       <div class="alert alert-info d-flex align-items-center" role="alert">
         <i class="bx bx-info-circle me-2"></i>
@@ -2187,6 +2272,46 @@ const ModalService = {
 
     // Recursos relacionados
     html += this.renderRelatedResources(resources);
+     if (resources.clarificationNotes?.length > 0) {
+      html += this.renderClarificationNotes(resources.clarificationNotes);
+    }
+
+    if (seccionesVacias.length > 0) {
+      html += `
+        <div class="card mb-3 shadow-sm">
+          <div class="card-header bg-light text-dark border">
+            <h4 class="mb-0"><i class="bx bx-info-circle"></i> Secciones sin información o que no se le declaran al paciente</h4>
+          </div>
+          <div class="card-body">
+            <ul class="list-group list-group-flush">
+              ${seccionesVacias.map(sec => {
+        const titulo = sec?.title || 'Sección sin título';
+        const razonDisplay = sec?.emptyReason?.coding?.[0]?.display || '';
+        const razonCodigo = sec?.emptyReason?.coding?.[0]?.code || '';
+        const textoDiv = sec?.text?.div
+          ? sec.text.div.replace(/<[^>]+>/g, '').trim()
+          : '';
+        return `
+                  <li class="list-group-item d-flex justify-content-between align-items-start" 
+                      style="border-left: 6px solid #ffc107; background-color: #fffbea;">
+                    <div>
+                      <strong>${Utils.escapeHtml(titulo)}</strong>
+                      ${textoDiv ? `<p class="mb-0 text-muted small mt-1">${Utils.escapeHtml(textoDiv)}</p>` : ''}
+                    </div>
+                    ${razonDisplay
+            ? `<span class="badge bg-dark ms-2">${Utils.escapeHtml(razonDisplay)}${razonCodigo ? ` [${Utils.escapeHtml(razonCodigo)}]` : ''}</span>`
+            : ''}
+                  </li>
+                `;
+      }).join('')}
+            </ul>
+          </div>
+        </div>
+      `;
+
+
+
+    }
 
     return html;
   },
@@ -2402,8 +2527,7 @@ const ModalService = {
               <p><strong>Fallecido:</strong> ${data.fallecido ? 'Sí' : 'No'}</p>
               <p><strong>Nombre:</strong> ${data.nombres || 'N/A'}</p>
               <p><strong>Documento:</strong> ${data.documento || 'N/A'}</p>
-              <p><strong>Tipo de documento:</strong> ${
-                data.tipoDocumento
+              <p><strong>Tipo de documento:</strong> ${data.tipoDocumento
                   ? `${data.tipoDocumento.code}${data.tipoDocumento.display ? ' – ' + data.tipoDocumento.display : ''}`
                   : 'N/A'
               }</p>
@@ -3545,9 +3669,123 @@ const ModalService = {
         </div>
       `;
     }
+ // ── Documentos Clínicos (DocumentReference) ──────────────────────────────
+    if (resources.documentReferences?.length > 0) {
+      html += `
+            <div class="card mb-3 shadow-sm">
+              <div class="card-header bg-secondary text-white">
+                <h4 class="mb-0"><i class="bx bx-file"></i> Documentos Clínicos (${resources.documentReferences.length})</h4>
+              </div>
+              <div class="card-body">
+          `;
 
-   
-    const tieneExtras = Object.values(resources).some(arr => arr?.length > 0);
+      resources.documentReferences.forEach((doc, idx) => {
+        const d = DataMappers.extractDocumentReferenceData(doc);
+        if (!d) return;
+
+        const statusBadge = (() => {
+          const s = (d.status || '').toLowerCase();
+          if (s === 'current') return ['bg-success', '✅ Actual'];
+          if (s === 'superseded') return ['bg-warning text-dark', '⚠️ Reemplazado'];
+          if (s === 'entered-in-error') return ['bg-danger', '❌ Error'];
+          return d.status ? ['bg-secondary', d.status] : null;
+        })();
+
+        html += `
+              ${idx > 0 ? '<hr class="my-3">' : ''}
+              <div class="document-item ${idx > 0 ? 'mt-3' : ''}">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-1 mb-3">
+                  <h5 class="mb-0">
+                    <span class="badge bg-secondary me-1">#${idx + 1}</span>
+                    <i class="bx bx-file-blank me-1"></i>
+                    ${Utils.escapeHtml(d.tipo?.display || 'Documento')}
+                  </h5>
+                  <div class="d-flex flex-wrap gap-1">
+                    ${statusBadge ? `<span class="badge ${statusBadge[0]}">${statusBadge[1]}</span>` : ''}
+                    ${d.confidencialidad.length > 0 ? `<span class="badge bg-danger">🔒 ${Utils.escapeHtml(d.confidencialidad[0])}</span>` : ''}
+                  </div>
+                </div>
+                <div class="row g-3">
+                  <div class="col-12 col-md-6">
+                    ${d.categoria ? `<p class="mb-2"><strong>Categoría:</strong> ${Utils.escapeHtml(d.categoria.display)}</p>` : ''}
+                    ${d.fecha ? `<p class="mb-2"><strong>Fecha:</strong> ${Utils.escapeHtml(Utils.formatearFecha(d.fecha))}</p>` : ''}
+                  </div>
+                  <div class="col-12 col-md-6">
+                    ${d.periodoContexto ? `<p class="mb-2"><strong>Período:</strong> ${d.periodoContexto.inicio ? Utils.escapeHtml(Utils.formatearFecha(d.periodoContexto.inicio)) : '?'} → ${d.periodoContexto.fin ? Utils.escapeHtml(Utils.formatearFecha(d.periodoContexto.fin)) : '?'}</p>` : ''}
+                  </div>
+                </div>
+                ${d.descripcion ? `<div class="mt-2"><p class="mb-1"><strong>Descripción:</strong></p><p class="text-muted small mb-0">${Utils.escapeHtml(d.descripcion)}</p></div>` : ''}
+    
+                <!-- ── Adjuntos Mejorado ── -->
+                ${d.contenidos.length > 0 ? `
+                  <div class="mt-3">
+                    <p class="mb-2 fw-bold">Adjuntos (${d.contenidos.length}):</p>
+                    <div class="list-group">
+                      ${d.contenidos.map((c, cidx) => {
+          const ruta = Utils.getText(c.url);
+          const contentType = Utils.getText(c.contentType).toLowerCase();
+          const titulo = c.titulo || `Archivo ${cidx + 1}`;
+          const esPDF =
+            contentType.includes('pdf') ||
+            ruta.toLowerCase().includes('.pdf') ||
+            ruta.includes('/DocumentReference/') ||
+            ruta.includes('/descargar') ||
+            c.tieneData === true;
+
+          let botonAccion = '';
+
+          if (esPDF) {
+            if (ruta.includes('/DocumentReference/') || ruta.includes('/descargar')) {
+              botonAccion = `
+                              <button class="btn btn-sm btn-danger"
+                                      onclick="PDFViewerService.mostrar('${ruta.replace(/'/g, "\\'")}')"
+                                      title="Ver PDF en visor">
+                                <i class="bx bxs-file-pdf"></i> Ver PDF
+                              </button>`;
+            } else if (c.tieneData) {
+              botonAccion = `<button class="btn btn-sm btn-secondary" disabled title="Contenido embebido (base64)">Base64</button>`;
+            } else if (ruta) {
+              botonAccion = `<a href="${Utils.escapeHtml(ruta)}" class="btn btn-sm btn-primary" target="_blank" rel="noopener">
+                                             <i class="bx bx-link-external"></i> Abrir
+                                           </a>`;
+            }
+          } else if (ruta) {
+            botonAccion = `<a href="${Utils.escapeHtml(ruta)}" class="btn btn-sm btn-primary" target="_blank" rel="noopener">
+                                           <i class="bx bx-link-external"></i> Abrir
+                                         </a>`;
+          }
+
+          return `
+                          <div class="list-group-item">
+                            <div class="d-flex justify-content-between align-items-start">
+                              <div>
+                                <h6 class="mb-1">
+                                  <i class="bx ${esPDF ? 'bxs-file-pdf text-danger' : 'bx-file'} me-1"></i>
+                                  ${Utils.escapeHtml(titulo)}
+                                </h6>
+                                <p class="mb-1 small text-muted">
+                                  ${contentType ? `Tipo: <code>${Utils.escapeHtml(c.contentType)}</code>` : ''}
+                                  ${c.formato ? ` • Formato: ${Utils.escapeHtml(c.formato)}` : ''}
+                                  ${c.tamanio ? ` • Tamaño: ${(c.tamanio / 1024).toFixed(1)} KB` : ''}
+                                </p>
+                              </div>
+                              ${botonAccion}
+                            </div>
+                          </div>
+                        `;
+        }).join('')}
+                    </div>
+                  </div>
+                ` : ''}
+              </div>
+            `;
+      });
+
+      html += `</div></div>`;
+    }
+
+
+    const tieneExtras = Object.values(resources).some(arr => Array.isArray(arr) && arr.length > 0);
 
     if (!tieneExtras) {
       html += `
@@ -3559,8 +3797,348 @@ const ModalService = {
     }
 
     return html;
-  }
+  },
+
+  renderClarificationNotes(notes) {
+    if (!notes || notes.length === 0) return '';
+
+    let html = `
+      <div class="card mb-3 shadow-sm">
+        <div class="card-header text-white" style="background-color: #6f42c1;">
+          <h4 class="mb-0">
+            <i class="bx bx-edit-alt"></i>
+            Notas Aclaratorias (${notes.length})
+          </h4>
+        </div>
+        <div class="card-body">
+    `;
+
+    notes.forEach((obs, idx) => {
+      const o = DataMappers.extractObservationData(obs);
+      if (!o) return;
+
+      // El texto de la nota viene en valueString → o.valor
+      const textoNota = typeof o.valor === 'string' ? o.valor : '';
+
+      // Obtener el performer (quien emitió la nota)
+      const performerRef = o.performers?.[0] || '';
+      const performerId = performerRef.includes('/') ? performerRef.split('/')[1] : '';
+
+      html += `
+        ${idx > 0 ? '<hr class="my-3">' : ''}
+        <div class="clarification-note-item ${idx > 0 ? 'mt-3' : ''}">
+  
+          <div class="d-flex justify-content-between align-items-start flex-wrap gap-1 mb-2">
+            <h5 class="mb-0">
+              <span class="badge bg-secondary me-1">#${idx + 1}</span>
+              <i class="bx bx-notepad me-1" style="color:#6f42c1;"></i>
+              ${Utils.escapeHtml(o.codigoTexto || o.codigo?.display || 'Nota aclaratoria')}
+            </h5>
+            ${o.fechaEfectiva ? `
+              <span class="badge bg-light text-dark border">
+                <i class="bx bx-calendar me-1"></i>
+                ${Utils.escapeHtml(Utils.formatearFecha(o.fechaEfectiva))}
+              </span>` : ''}
+          </div>
+  
+          ${textoNota ? `
+            <div class="p-3 rounded" style="background-color:#f3eeff; border-left: 4px solid #6f42c1;">
+              <p class="mb-0" style="white-space: pre-wrap; color: #3d2070;">
+                ${Utils.escapeHtml(textoNota)}
+              </p>
+            </div>` :
+          `<p class="text-muted small fst-italic">Sin contenido de nota.</p>`
+        }
+  
+          ${performerId ? `
+            <p class="mt-2 mb-0 text-muted small">
+              <i class="bx bx-user me-1"></i>
+              <strong>Emitida por:</strong> <code>${Utils.escapeHtml(performerId)}</code>
+            </p>` : ''}
+  
+        </div>
+      `;
+    });
+
+    html += `
+        </div>
+      </div>
+    `;
+
+    return html;
+  },
 };
+// ============================================================================
+// 12b. SERVICIO VISOR PDF
+// ============================================================================
+
+const PDFViewerService = {
+  _objectUrl: null,
+  _pdfDoc: null,
+  _currentPage: 1,
+  _totalPages: 0,
+  _scale: 1.2,
+  _rendering: false,
+
+  ensureViewer() {
+    let overlay = document.getElementById('pdfViewerOverlay');
+    if (overlay) return overlay;
+
+    overlay = document.createElement('div');
+    overlay.id = 'pdfViewerOverlay';
+    overlay.style.cssText = `
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 9999;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    `;
+
+    overlay.innerHTML = `
+      <div style="
+        background: #2d2d2d;
+        width: 90vw;
+        height: 90vh;
+        border-radius: 8px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+      ">
+        <!-- Barra superior -->
+        <div style="
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 10px 16px;
+          background: #343a40;
+          color: #fff;
+          flex-shrink: 0;
+        ">
+          <span id="pdfViewerTitle" style="font-size:14px; font-weight:600;">
+            <i class="bx bxs-file-pdf" style="color:#e74c3c;"></i> Documento PDF
+          </span>
+          <!-- Controles de página -->
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button id="pdfPrevPage" class="btn btn-sm btn-outline-light" title="Página anterior">
+              <i class="bx bx-chevron-left"></i>
+            </button>
+            <span style="color:#fff; font-size:13px;">
+              Página <span id="pdfCurrentPage">1</span> de <span id="pdfTotalPages">-</span>
+            </span>
+            <button id="pdfNextPage" class="btn btn-sm btn-outline-light" title="Página siguiente">
+              <i class="bx bx-chevron-right"></i>
+            </button>
+            <span style="width:1px; background:#666; height:20px; display:inline-block; margin:0 4px;"></span>
+            <button id="pdfZoomOut" class="btn btn-sm btn-outline-light" title="Alejar">
+              <i class="bx bx-zoom-out"></i>
+            </button>
+            <button id="pdfZoomIn" class="btn btn-sm btn-outline-light" title="Acercar">
+              <i class="bx bx-zoom-in"></i>
+            </button>
+            <span style="width:1px; background:#666; height:20px; display:inline-block; margin:0 4px;"></span>
+            <button onclick="PDFViewerService.cerrar()" class="btn btn-sm btn-outline-light" title="Cerrar">
+              <i class="bx bx-x"></i> Cerrar
+            </button>
+          </div>
+        </div>
+
+        <!-- Loader -->
+        <div id="pdfViewerLoader" style="
+          display: flex;
+          flex: 1;
+          align-items: center;
+          justify-content: center;
+          font-size: 18px;
+          color: #aaa;
+          gap: 10px;
+        ">
+          <i class="bx bx-loader-alt bx-spin" style="font-size:28px;"></i>
+          Cargando documento...
+        </div>
+
+        <!-- Canvas container -->
+        <div id="pdfCanvasContainer" style="
+          display: none;
+          flex: 1;
+          overflow-y: auto;
+          overflow-x: auto;
+          background: #525659;
+          display: none;
+          align-items: flex-start;
+          justify-content: center;
+          padding: 20px;
+        ">
+          <canvas id="pdfCanvas" style="
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            background: white;
+            display: block;
+          "></canvas>
+        </div>
+
+        <!-- Error -->
+        <div id="pdfViewerError" style="
+          display: none;
+          flex: 1;
+          align-items: center;
+          justify-content: center;
+          flex-direction: column;
+          gap: 12px;
+          color: #dc3545;
+          font-size: 16px;
+          padding: 20px;
+          text-align: center;
+        ">
+          <i class="bx bx-error-circle" style="font-size:48px;"></i>
+          <span id="pdfViewerErrorMsg">No se pudo cargar el documento.</span>
+          <button onclick="PDFViewerService.cerrar()" class="btn btn-sm btn-secondary mt-2">Cerrar</button>
+        </div>
+      </div>
+    `;
+
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) this.cerrar();
+    });
+
+    document.body.appendChild(overlay);
+
+    // Eventos botones
+    document.getElementById('pdfPrevPage').addEventListener('click', () => this.cambiarPagina(-1));
+    document.getElementById('pdfNextPage').addEventListener('click', () => this.cambiarPagina(1));
+    document.getElementById('pdfZoomIn').addEventListener('click', () => this.cambiarZoom(0.2));
+    document.getElementById('pdfZoomOut').addEventListener('click', () => this.cambiarZoom(-0.2));
+
+    return overlay;
+  },
+
+  async cargarPDFJS() {
+    if (window.pdfjsLib) return;
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      script.onload = resolve;
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  },
+
+  async mostrar(ruta) {
+    const overlay = this.ensureViewer();
+    const loader = document.getElementById('pdfViewerLoader');
+    const container = document.getElementById('pdfCanvasContainer');
+    const errorDiv = document.getElementById('pdfViewerError');
+    const errorMsg = document.getElementById('pdfViewerErrorMsg');
+    const titleEl = document.getElementById('pdfViewerTitle');
+
+    overlay.style.display = 'flex';
+    loader.style.display = 'flex';
+    container.style.display = 'none';
+    errorDiv.style.display = 'none';
+
+    const segmentos = ruta.split('/').filter(Boolean);
+    const idxDocRef = segmentos.indexOf('DocumentReference');
+    const nombreDoc = idxDocRef !== -1
+      ? `RDA – ${segmentos[idxDocRef + 1]?.slice(0, 8) ?? ''}…`
+      : 'Documento PDF';
+    titleEl.innerHTML = `<i class="bx bxs-file-pdf" style="color:#e74c3c;"></i> ${nombreDoc}`;
+
+    if (this._objectUrl) {
+      URL.revokeObjectURL(this._objectUrl);
+      this._objectUrl = null;
+    }
+
+    try {
+      await this.cargarPDFJS();
+
+      const objectUrl = await APIService.obtenerPDF(ruta);
+      this._objectUrl = objectUrl;
+
+      const loadingTask = window.pdfjsLib.getDocument(objectUrl);
+      this._pdfDoc = await loadingTask.promise;
+      this._totalPages = this._pdfDoc.numPages;
+      this._currentPage = 1;
+
+      document.getElementById('pdfTotalPages').textContent = this._totalPages;
+
+      loader.style.display = 'none';
+      container.style.display = 'flex';
+
+      await this.renderPagina(this._currentPage);
+
+    } catch (e) {
+      console.error('Error cargando PDF:', e);
+      loader.style.display = 'none';
+      errorMsg.textContent = e?.message || 'No se pudo cargar el documento.';
+      errorDiv.style.display = 'flex';
+    }
+  },
+
+  async renderPagina(num) {
+    if (this._rendering) return;
+    this._rendering = true;
+
+    const page = await this._pdfDoc.getPage(num);
+    const canvas = document.getElementById('pdfCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const viewport = page.getViewport({ scale: this._scale });
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+
+    await page.render({ canvasContext: ctx, viewport }).promise;
+
+    document.getElementById('pdfCurrentPage').textContent = num;
+    document.getElementById('pdfPrevPage').disabled = num <= 1;
+    document.getElementById('pdfNextPage').disabled = num >= this._totalPages;
+
+    this._rendering = false;
+  },
+
+  async cambiarPagina(delta) {
+    const nueva = this._currentPage + delta;
+    if (nueva < 1 || nueva > this._totalPages) return;
+    this._currentPage = nueva;
+    await this.renderPagina(nueva);
+  },
+
+  async cambiarZoom(delta) {
+    this._scale = Math.min(3, Math.max(0.5, this._scale + delta));
+    await this.renderPagina(this._currentPage);
+  },
+
+  cerrar() {
+    const overlay = document.getElementById('pdfViewerOverlay');
+    if (overlay) overlay.style.display = 'none';
+
+    this._pdfDoc = null;
+    this._currentPage = 1;
+    this._totalPages = 0;
+    this._rendering = false;
+
+    if (this._objectUrl) {
+      URL.revokeObjectURL(this._objectUrl);
+      this._objectUrl = null;
+    }
+  },
+
+  _objectUrl: null,
+  _pdfDoc: null,
+  _currentPage: 1,
+  _totalPages: 0,
+  _scale: 1.2,
+  _rendering: false
+};
+
+// Atajo de teclado ESC para cerrar el visor
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') PDFViewerService?.cerrar();
+});
+
 
 // ============================================================================
 // 13. CONTROLADORES PRINCIPALES
@@ -3689,7 +4267,7 @@ const AppController = {
       filtrados = AppState.datosEncuentrosGlobales;
     } else {
       const mapa = {
-        consulta: ['consulta','consulta externa'],
+        consulta: ['consulta'],
         'hospitalización': ['hospitalización', 'hospitalizacion', 'hospital'],
         urgencias: ['urgencias', 'urgencia', 'emergencia'],
         procedimiento: ['procedimiento', 'procedimientos']

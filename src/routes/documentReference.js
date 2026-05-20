@@ -161,16 +161,21 @@ class FHIRService {
   }
 
   /**
-   * Extrae todas las referencias de los Compositions del Bundle dado
-   * Evita duplicados usando Set
+    * Extrae todas las referencias de los Compositions + Encounters + DocumentReferences
+   * Mejorado para capturar mejor las relaciones con PDFs
    */
   extractReferences(compositionBundle) {
     const allReferences = new Set();
-    if (!compositionBundle.entry) return allReferences;
+
+    if (!compositionBundle?.entry) return allReferences;
 
     compositionBundle.entry.forEach(entry => {
-      if (entry.resource?.resourceType === 'Composition') {
-        const comp = entry.resource;
+      const resource = entry.resource;
+      if (!resource) return;
+
+      // === Composition ===
+      if (resource.resourceType === 'Composition') {
+        const comp = resource;
 
         [comp.subject?.reference, comp.encounter?.reference, comp.custodian?.reference]
           .filter(Boolean)
@@ -193,7 +198,34 @@ class FHIRService {
           .filter(Boolean)
           .forEach(ref => allReferences.add(ref));
       }
+
+      // === Encounter (IMPORTANTE) ===
+      if (resource.resourceType === 'Encounter') {
+        const enc = resource;
+
+        if (enc.subject?.reference) allReferences.add(enc.subject.reference);
+        if (enc.serviceProvider?.reference) allReferences.add(enc.serviceProvider.reference);
+
+        // Participants
+        (enc.participant || []).forEach(p => {
+          if (p.individual?.reference) allReferences.add(p.individual.reference);
+        });
+
+        // Diagnósticos
+        (enc.diagnosis || []).forEach(d => {
+          if (d.condition?.reference) allReferences.add(d.condition.reference);
+        });
+      }
+
+      // === DocumentReference (Forzar inclusión) ===
+      if (resource.resourceType === 'DocumentReference') {
+        // Incluir el propio DocumentReference
+        if (resource.id) {
+          allReferences.add(`DocumentReference/${resource.id}`);
+        }
+      }
     });
+
 
     return allReferences;
   }
@@ -291,32 +323,40 @@ class FHIRService {
       }
     }
 
-    // 1) Extraer referencias desde las Composition
+    // 2. Extraer referencias
     const allReferences = this.extractReferences(compositionBundle);
 
-    // 2) Preparar fetch de las referencias que NO están embebidas
+    // 3. Fetch de referencias faltantes
     const fetchPromises = Array.from(allReferences)
       .filter(ref => {
-        // Normalizar a "Type/id" para lookup
-        if (ref.startsWith('http')) return true; // no se puede evaluar fácil, se intenta fetch
-        const key = ref.replace(/^\/*/, ''); // remove leading slash
+        const key = ref.replace(/^\/*/, '');
         return !embeddedIndex.has(key);
       })
       .map(reference =>
         this.fetchSingleResource(reference, token, subscriptionKey)
           .then(resource => this.categorizeResource(resource, referencedResources))
-          .catch(error => console.warn(`⚠️ No se pudo obtener recurso ${reference}:`, error.message))
+          .catch(error => console.warn(`⚠️ No se pudo obtener ${reference}:`, error.message))
       );
 
-    // 3) Además, categorizar los embebidos (gratis)
+    // 4. Categorizar recursos embebidos
     for (const [, resource] of embeddedIndex.entries()) {
       this.categorizeResource(resource, referencedResources);
     }
 
     await Promise.all(fetchPromises);
+
+    // === FORZAR INCLUSIÓN DE TODOS LOS DOCUMENTREFERENCE DEL BUNDLE ===
+    if (compositionBundle?.entry) {
+      compositionBundle.entry.forEach(entry => {
+        if (entry.resource?.resourceType === 'DocumentReference') {
+          this.categorizeResource(entry.resource, referencedResources);
+        }
+      });
+    }
+
+
     return referencedResources;
   }
-
   /**
    * Resumen de recursos
    */
@@ -427,6 +467,13 @@ router.get('/composition/:id/document', extractCredentials, async (req, res) => 
 
     const documento = await response.json();
 
+    if (documento.entry) {
+      const resourceTypes = documento.entry.map(e => e.resource?.resourceType).filter(Boolean);
+      const uniqueTypes = [...new Set(resourceTypes)];
+  
+      const hasPatient = documento.entry.some(e => e.resource?.resourceType === 'Patient');
+ 
+    }
 
     res.json(documento);
   } catch (error) {
@@ -443,7 +490,7 @@ router.get('/patient/:id', extractCredentials, async (req, res) => {
     const { id } = req.params;
     const { clientId, clientSecret, subscriptionKey } = req.credentials;
 
-    console.log(`👤 Obteniendo Patient ID: ${id}`);
+    // console.log(`👤 Obteniendo Patient ID: ${id}`);
     const paciente = await fhirService.obtenerRecurso('Patient', id, clientId, clientSecret, subscriptionKey);
     res.json(paciente);
   } catch (error) {
@@ -567,7 +614,7 @@ router.post('/composition', async (req, res) => {
           subscriptionKey
         );
       } catch (refError) {
-     
+        console.error('⚠️ Error obteniendo recursos referenciados:', refError.message);
         // Continuar sin los recursos referenciados
       }
     }
@@ -603,6 +650,10 @@ router.post('/composition', async (req, res) => {
       }
     };
 
+    console.log('✅ Consulta dual completada');
+  
+    console.log(`   📊 De Paciente: ${completeResult.summary.compositionsPaciente}`);
+    console.log(`   📊 De Encuentros: ${completeResult.summary.compositionsEncuentros}`);
 
 
     res.json(completeResult);
@@ -751,5 +802,43 @@ function mergeReferencedResources(target, source) {
     });
   }
 }
+/**
+ * GET /DocumentReference/:id/0/descargar-rda-epicrisis
+ * Descarga el PDF del documento clínico
+ */
+router.get('/DocumentReference/:id/0/descargar-rda-epicrisis', extractCredentials, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { clientId, clientSecret, subscriptionKey } = req.credentials;
+
+
+
+    const token = await fhirService.getToken(clientId, clientSecret);
+
+    const url = `${fhirService.baseUrl}/DocumentReference/${id}/0/descargar-rda-epicrisis`;
+
+    const response = await httpsAgent.authenticatedRequest(url, token, subscriptionKey);
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.error('❌ Error descargando PDF:', response.status, text);
+      return res.status(response.status).json({
+        error: 'Error descargando documento PDF',
+        details: text
+      });
+    }
+
+    // Reenviar el PDF tal como llega
+    const contentType = response.headers.get('content-type') || 'application/pdf';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `inline; filename="rda-${id}.pdf"`);
+
+    const buffer = await response.arrayBuffer();
+    res.send(Buffer.from(buffer));
+
+  } catch (error) {
+    handleError(error, res, 'descarga PDF DocumentReference');
+  }
+});
 
 export default router;
