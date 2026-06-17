@@ -75,6 +75,14 @@
                                             <option value="CE">Cédula de Extranjería</option>
                                             <option value="PA">Pasaporte</option>
                                             <option value="RC">Registro Civil</option>
+                                            <option value="AS">Adulto sin Identificar</option>
+                                            <option value="MS">Menor sin Identificar</option>
+                                            <option value="CN">Certificado de Nacido Vivo</option>
+                                            <option value="CD">Carné Diplomático</option>
+                                            <option value="DE">Documento Extranjero</option>
+                                            <option value="PE">Permiso Especial de Permanencia</option>
+                                            <option value="SC">Salvoconducto</option>
+                                            <option value="PPT">Permiso por Protección Temporal</option>
                                         </select>
                                     </div>
                                     
@@ -327,10 +335,11 @@
 
             // Asignar al campo inputDocumento si existe
             if (documento && tipoDocumento) {
-            document.getElementById("inputDocumento").value = documento;
-            
-            const selectTipo = document.getElementById("inputTipoDocumento");
-            selectTipo.value = tipoDocumento;
+                document.getElementById("inputDocumento").value = documento;
+                document.getElementById("inputDocumento").disabled = true;
+                const selectTipo = document.getElementById("inputTipoDocumento");
+                selectTipo.value = tipoDocumento;
+                selectTipo.disabled = true; 
             }
         };
     </script>
