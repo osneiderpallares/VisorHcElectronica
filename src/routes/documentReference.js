@@ -8,7 +8,14 @@ const router = express.Router();
  */
 class FHIRService {
   constructor() {
-    this.baseUrl = 'https://www.ihcecol.gov.co/ihce';
+    this.baseUrl = 'https://sandbox.ihcecol.gov.co/ihce';
+  }
+
+  async init() {
+    const resp = await fetch('http://localhost:3002/Configuracion');
+    if (!resp.ok) throw new Error('Error cargando configuración');
+    const CONFI = await resp.json();
+    this.baseUrl = CONFI.datos.URL;
   }
 
   /**
