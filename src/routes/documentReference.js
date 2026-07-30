@@ -391,6 +391,7 @@ class FHIRService {
 }
 
 const fhirService = new FHIRService();
+await fhirService.init();
 
 /**
  * Middleware para extraer credenciales
