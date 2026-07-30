@@ -11,7 +11,7 @@ connectDB();
 
 app.get('/Configuracion/', async (req, res) => {
     try{
-        const result = await sql.query`SELECT * FROM CONSULTAS_CONF_RDA`;
+        const result = await sql.query`SELECT * FROM CONSULTAS_CONF_RDA WHERE ESTADO=1`;
         // recordset es un array con los resultados
         if (!result.recordset || result.recordset.length === 0) {
         return res.status(404).json({ error: 'Configuración no encontrada' });

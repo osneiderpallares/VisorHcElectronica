@@ -6,7 +6,8 @@
 class FHIRService {
     constructor() {
         this.baseUrls = {
-            prod: 'https://sandbox.ihcecol.gov.co/ihce',
+            prod: 'https://www.ihcecol.gov.co/ihce',
+            prod2: 'https://sandbox.ihcecol.gov.co/ihce',
             dev: 'https://dev-fevrips.sispro.gov.co/ihce-ahds'
         };
         this.baseUrl = this.baseUrls.prod; // Default a producción

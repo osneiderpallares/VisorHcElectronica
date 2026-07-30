@@ -32,6 +32,7 @@
  *   }
  * }
  */
+
 router.post('/inmunizacion', async (req, res) => {
     try {
       const { subscriptionKey, payload } = req.body || {};
@@ -39,8 +40,14 @@ router.post('/inmunizacion', async (req, res) => {
       if (!payload?.parameter) {
         return res.status(400).json({ error: 'payload (Parameters) es requerido' });
       }
-  
-      const API_BASE = process.env.IHCE_API_BASE || 'https://sandbox.ihcecol.gov.co/ihce';
+
+      // Iniciarlizar variables de configuracion
+      const resp = await fetch('http://localhost:3002/Configuracion');
+      if (!resp.ok) throw new Error('Error cargando configuración');
+      const CONFI = await resp.json();
+      const urlBase = CONFI.datos.URL;
+    
+      const API_BASE = urlBase || 'https://sandbox.ihcecol.gov.co/ihce';
       const url = `${API_BASE}/Immunization/$consultar-inmunizacion`;
   
       // 1) Obtener token con TU agente (usa sus propios clientId/clientSecret)
