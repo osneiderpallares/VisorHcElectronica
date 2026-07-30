@@ -8,7 +8,7 @@ const router = express.Router();
  */
 class FHIRService {
   constructor() {
-    this.baseUrl = 'https://sandbox.ihcecol.gov.co/ihce';
+    this.baseUrl = 'https://www.ihcecol.gov.co/ihce';
   }
 
   /**
