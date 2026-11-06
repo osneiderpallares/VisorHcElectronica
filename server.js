@@ -9,9 +9,50 @@ app.use(cors()); // habilita CORS
 
 connectDB();
 
+/**
+ * GET /Configuracion
+ * Parámetros opcionales (query string):
+ *   - id       → filtra por ID
+ *   - ambiente → filtra por AMBIENTE (si no se envía, usa process.env.AMBIENTE si existe)
+ *   - estado   → filtra por ESTADO (por defecto 1)
+ * Ej: /Configuracion?ambiente=0   /Configuracion?id=1
+ */
 app.get('/Configuracion/', async (req, res) => {
     try{
-        const result = await sql.query`SELECT * FROM CONSULTAS_CONF_RDA WHERE ESTADO=1`;
+        const toInt = (v) => {
+            if (v === undefined || v === null || v === '') return null;
+            const n = Number.parseInt(v, 10);
+            return Number.isNaN(n) ? NaN : n;
+        };
+
+        const id       = toInt(req.query.id);
+        const ambiente = toInt(req.query.ambiente ?? process.env.AMBIENTE);
+        const estado   = toInt(req.query.estado) ?? 1;
+
+        if ([id, ambiente, estado].some(Number.isNaN)) {
+            return res.status(400).json({ error: 'Los parámetros id, ambiente y estado deben ser numéricos' });
+        }
+
+        const request = new sql.Request();
+        const filtros = ['ESTADO = @estado'];
+        request.input('estado', sql.Int, estado);
+
+        if (id !== null) {
+            filtros.push('ID = @id');
+            request.input('id', sql.Int, id);
+        }
+        if (ambiente !== null) {
+            filtros.push('AMBIENTE = @ambiente');
+            request.input('ambiente', sql.Int, ambiente);
+        }
+
+        const result = await request.query(`
+            SELECT ID, CLIENTE_ID, CLIENTE_SECRET, SCOPE, AMBIENTE,
+                   SUBSCRIPTIONKEY, TENANTID, ESTADO, URL
+            FROM CONSULTAS_CONF_RDA
+            WHERE ${filtros.join(' AND ')}
+            ORDER BY ID
+        `);
         // recordset es un array con los resultados
         if (!result.recordset || result.recordset.length === 0) {
         return res.status(404).json({ error: 'Configuración no encontrada' });

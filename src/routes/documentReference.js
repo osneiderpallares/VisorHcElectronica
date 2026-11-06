@@ -1,5 +1,6 @@
 import express from 'express';
 import httpsAgent from '../services/httpsAgent.js';
+import { getConfig, resolverCredenciales } from '../services/configuracion.js';
 
 const router = express.Router();
 
@@ -8,14 +9,15 @@ const router = express.Router();
  */
 class FHIRService {
   constructor() {
-    this.baseUrl = 'https://sandbox.ihcecol.gov.co/ihce';
+    this.baseUrl = '';
   }
 
+  /**
+   * Carga la URL base desde CONSULTAS_CONF_RDA (columna URL)
+   */
   async init() {
-    const resp = await fetch('http://localhost:3002/Configuracion');
-    if (!resp.ok) throw new Error('Error cargando configuración');
-    const CONFI = await resp.json();
-    this.baseUrl = CONFI.datos.URL;
+    const cfg = await getConfig();
+    this.baseUrl = cfg.url;
   }
 
   /**
@@ -391,23 +393,37 @@ class FHIRService {
 }
 
 const fhirService = new FHIRService();
-await fhirService.init();
+try {
+  await fhirService.init();
+} catch (err) {
+  console.error('⚠️ No se pudo cargar la configuración al iniciar:', err.message);
+}
+
+/**
+ * Asegura que la URL base esté cargada (si falló al iniciar, reintenta)
+ */
+async function asegurarConfig(req, res, next) {
+  try {
+    if (!fhirService.baseUrl) await fhirService.init();
+    next();
+  } catch (err) {
+    res.status(503).json({ error: 'Configuración no disponible', details: err.message });
+  }
+}
+router.use(asegurarConfig);
 
 /**
  * Middleware para extraer credenciales
  */
-function extractCredentials(req, res, next) {
-  const { clientId, clientSecret, subscriptionKey } =
-    req.method === 'GET' ? req.query : req.body;
-
-  if (!clientId || !clientSecret || !subscriptionKey) {
-    return res.status(400).json({
-      error: 'Faltan credenciales: clientId, clientSecret, subscriptionKey son requeridos'
-    });
+async function extractCredentials(req, res, next) {
+  try {
+    const origen = (req.method === 'GET' ? req.query : req.body) || {};
+    // Si el cliente no las envía, se toman de CONSULTAS_CONF_RDA
+    req.credentials = await resolverCredenciales(origen);
+    next();
+  } catch (err) {
+    res.status(503).json({ error: 'Configuración no disponible', details: err.message });
   }
-
-  req.credentials = { clientId, clientSecret, subscriptionKey };
-  next();
 }
 
 /**
@@ -521,11 +537,8 @@ router.get('/patient/:id', extractCredentials, async (req, res) => {
  *   "payload": { /* parámetros de la operación RDA */ 
 router.post('/composition', async (req, res) => {
   try {
-    const { clientId, clientSecret, subscriptionKey, payload } = req.body;
-
-    if (!clientId || !clientSecret || !subscriptionKey) {
-      return res.status(400).json({ error: 'Faltan credenciales: clientId, clientSecret, subscriptionKey' });
-    }
+    const { payload } = req.body;
+    const { clientId, clientSecret, subscriptionKey } = await resolverCredenciales(req.body);
     if (!payload) {
       return res.status(400).json({ error: 'payload es requerido con los parámetros de búsqueda' });
     }
@@ -681,11 +694,8 @@ router.post('/composition', async (req, res) => {
  */
 router.post('/document-metadata', async (req, res) => {
   try {
-    const { clientId, clientSecret, subscriptionKey, docId } = req.body;
-
-    if (!clientId || !clientSecret || !subscriptionKey) {
-      return res.status(400).json({ error: 'Faltan credenciales: clientId, clientSecret, subscriptionKey' });
-    }
+    const { docId } = req.body;
+    const { clientId, clientSecret, subscriptionKey } = await resolverCredenciales(req.body);
     if (!docId) {
       return res.status(400).json({ error: 'Falta parámetro requerido: docId' });
     }

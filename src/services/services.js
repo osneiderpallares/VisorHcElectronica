@@ -1,18 +1,13 @@
-
+import { getConfig } from './configuracion.js';
 
 /**
  * Servicio unificado para operaciones FHIR
+ * La URL base viene de CONSULTAS_CONF_RDA (columna URL).
  */
 class FHIRService {
-    constructor() {
-        this.baseUrls = {
-            prod: 'https://www.ihcecol.gov.co/ihce',
-            prod2: 'https://sandbox.ihcecol.gov.co/ihce',
-            dev: 'https://dev-fevrips.sispro.gov.co/ihce-ahds'
-        };
-        this.baseUrl = this.baseUrls.prod; // Default a producción
+    async getBaseUrl() {
+        return (await getConfig()).url;
     }
-
 }
 
 // Exportar instancia única (Singleton)

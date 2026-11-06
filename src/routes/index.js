@@ -1,6 +1,7 @@
     import express from 'express';
     import fhirService from '../services/services.js';
     import httpsAgent from '../services/httpsAgent.js';
+    import { getConfig, resolverCredenciales } from '../services/configuracion.js';
 
 
     const router = express.Router();
@@ -35,20 +36,16 @@
 
 router.post('/inmunizacion', async (req, res) => {
     try {
-      const { subscriptionKey, payload } = req.body || {};
+      const { payload } = req.body || {};
   
       if (!payload?.parameter) {
         return res.status(400).json({ error: 'payload (Parameters) es requerido' });
       }
 
-      // Iniciarlizar variables de configuracion
-      const resp = await fetch('http://localhost:3002/Configuracion');
-      if (!resp.ok) throw new Error('Error cargando configuración');
-      const CONFI = await resp.json();
-      const urlBase = CONFI.datos.URL;
-    
-      const API_BASE = urlBase || 'https://sandbox.ihcecol.gov.co/ihce';
-      const url = `${API_BASE}/Immunization/$consultar-inmunizacion`;
+      // Variables de configuración (CONSULTAS_CONF_RDA)
+      const cfg = await getConfig();
+      const { subscriptionKey } = await resolverCredenciales(req.body);
+      const url = `${cfg.url}/Immunization/$consultar-inmunizacion`;
   
       // 1) Obtener token con TU agente (usa sus propios clientId/clientSecret)
       const token = await httpsAgent.getAccessToken();
@@ -90,7 +87,8 @@ router.post('/inmunizacion', async (req, res) => {
  */
 router.get('/composition/pagina', async (req, res) => {
     try {
-        const { url, clientId, clientSecret, subscriptionKey } = req.query;
+        const { url } = req.query;
+        const { clientId, clientSecret, subscriptionKey } = await resolverCredenciales(req.query);
 
         if (!url) {
             return res.status(400).json({ error: 'URL es requerida' });

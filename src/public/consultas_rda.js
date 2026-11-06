@@ -1827,6 +1827,9 @@ const UIRenderers = {
 
     const tbody = tabla.querySelector('tbody');
 
+    // Recursos referenciados (DocumentReference, etc.) del último resultado consultado
+    const refs = FHIRUtils.ensureRefArrays(AppState.datosGlobalesFHIR?.referencedResources);
+
     entries.forEach((entry, index) => {
       const r = entry?.resource;
       if (!r) return;
@@ -1844,6 +1847,7 @@ const UIRenderers = {
         const hasDirectRef = Utils.safeArray(r.section).some(section =>
           Utils.safeArray(section?.entry).some(e => {
             const ref = Utils.getText(e?.reference);
+            if (!ref || !doc?.id) return false;
             return ref.includes(doc.id) || doc.id.includes(ref);
           })
         );
