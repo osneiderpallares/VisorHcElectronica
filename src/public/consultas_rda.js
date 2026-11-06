@@ -6,11 +6,10 @@
 // 1. CONFIGURACIÓN Y CONSTANTES
 // ============================================================================
 
+// Las credenciales (CONSULTAS_CONF_RDA) las resuelve el backend; el navegador no las necesita.
+// Ruta relativa: usa el mismo servidor/puerto desde el que se cargó la página.
 const CONFIG = {
-  clientId: '', 
-  clientSecret: '', 
-  subscriptionKey: '', 
-  apiBaseUrl: 'http://localhost:3001/api',
+  apiBaseUrl: '/api',
 };
 
 const ROLES_ORG = {
@@ -261,9 +260,6 @@ const APIService = {
     const fechaDesde = DOM.elements.inputFechaDesde?.value || '';
 
     const parametros = {
-      clientId: CONFIG.clientId,
-      clientSecret: CONFIG.clientSecret,
-      subscriptionKey: CONFIG.subscriptionKey,
       payload: {
         resourceType: 'Parameters',
         parameter: [
@@ -317,9 +313,6 @@ const APIService = {
         'Accept': 'application/json' 
       },
       body: JSON.stringify({
-        clientId: CONFIG.clientId,
-        clientSecret: CONFIG.clientSecret,
-        subscriptionKey: CONFIG.subscriptionKey,
         payload: {
           resourceType: 'Parameters',
           parameter: [{
@@ -380,9 +373,6 @@ const APIService = {
     const queryUrl = 
       `${CONFIG.apiBaseUrl}/pagina` +
       `?url=${encodeURIComponent(url)}` +
-      `&clientId=${encodeURIComponent(CONFIG.clientId)}` +
-      `&clientSecret=${encodeURIComponent(CONFIG.clientSecret)}` +
-      `&subscriptionKey=${encodeURIComponent(CONFIG.subscriptionKey)}` +
       `&patientId=${encodeURIComponent(patientId)}`;
 
     const response = await fetch(queryUrl);
@@ -395,16 +385,6 @@ const APIService = {
     return await response.json();
   },
 
-  async consultarConfiguracion(){
-    const resp = await fetch('http://localhost:3002/Configuracion');
-    if (!resp.ok) throw new Error('Error cargando configuración');
-    const CONFI = await resp.json();
-    CONFIG.clientId = CONFI.datos.CLIENTE_ID;
-    CONFIG.clientSecret = CONFI.datos.CLIENTE_SECRET;
-    CONFIG.subscriptionKey = CONFI.datos.SUBSCRIPTIONKEY;
-  },
-  // console.log('✅ CONFIG cargado:', CONFI.datos);
-
   // ─── NUEVO: obtener PDF desde ruta FHIR ────────────────────────────────────
   async obtenerPDF(rutaDocumento) {
     // Extraer el ID dinámico del DocumentReference
@@ -415,10 +395,7 @@ const APIService = {
     const docId = match[1];
 
     const url =
-      `${CONFIG.apiBaseUrl}/DocumentReference/${docId}/0/descargar-rda-epicrisis` +
-      `?clientId=${encodeURIComponent(CONFIG.clientId)}` +
-      `&clientSecret=${encodeURIComponent(CONFIG.clientSecret)}` +
-      `&subscriptionKey=${encodeURIComponent(CONFIG.subscriptionKey)}`;
+      `${CONFIG.apiBaseUrl}/DocumentReference/${docId}/0/descargar-rda-epicrisis`;
 
   
 
@@ -4176,9 +4153,6 @@ const AppController = {
 
       // Limpiar datos previos
       InmunizacionService.limpiar();
-
-      // Iniciarlizar variables de configuracion
-      await APIService.consultarConfiguracion();
 
       // Iniciar consultas en paralelo
       const consultaPromises = [
