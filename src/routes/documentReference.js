@@ -400,11 +400,12 @@ try {
 }
 
 /**
- * Asegura que la URL base esté cargada (si falló al iniciar, reintenta)
+ * Actualiza la URL base en cada petición (getConfig está en caché, así que es barato
+ * y toma los cambios de CONSULTAS_CONF_RDA sin reiniciar)
  */
 async function asegurarConfig(req, res, next) {
   try {
-    if (!fhirService.baseUrl) await fhirService.init();
+    await fhirService.init();
     next();
   } catch (err) {
     res.status(503).json({ error: 'Configuración no disponible', details: err.message });

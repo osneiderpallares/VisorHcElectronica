@@ -22,7 +22,12 @@ import fetch from "node-fetch";
 
 const CONFIG_URL = process.env.CONFIG_URL || "http://localhost:3002/Configuracion";
 
+// Tiempo que se reutiliza la configuración antes de volver a consultar la tabla.
+// Así un cambio en CONSULTAS_CONF_RDA se aplica sin reiniciar (default 60 s).
+const CONFIG_TTL_MS = Number(process.env.CONFIG_TTL_MS ?? 60000);
+
 let cache = null;      // configuración ya cargada
+let cargadaEn = 0;     // momento de la última carga
 let enCurso = null;    // promesa de carga en curso (evita consultas simultáneas)
 
 function construirUrl() {
@@ -63,20 +68,43 @@ async function cargar() {
  * Devuelve la configuración activa (cacheada).
  */
 export async function getConfig() {
-  if (cache) return cache;
+  if (cache && Date.now() - cargadaEn < CONFIG_TTL_MS) return cache;
   if (!enCurso) {
     enCurso = cargar()
-      .then((cfg) => (cache = cfg))
+      .then((cfg) => {
+        if (!cache || cache.id !== cfg.id || cache.url !== cfg.url) {
+          console.log(`⚙️ Configuración activa: ID=${cfg.id} AMBIENTE=${cfg.ambiente} URL=${cfg.url}`);
+        }
+        cache = cfg;
+        cargadaEn = Date.now();
+        return cfg;
+      })
+      .catch((err) => {
+        // Si ya había una configuración, se sigue usando mientras el servicio vuelve
+        if (cache) {
+          console.warn("⚠️ No se pudo refrescar la configuración, se usa la anterior:", err.message);
+          return cache;
+        }
+        throw err;
+      })
       .finally(() => (enCurso = null));
   }
   return enCurso;
 }
 
 /**
+ * Datos no sensibles de la configuración activa (para diagnóstico).
+ */
+export async function resumenConfig() {
+  const cfg = await getConfig();
+  return { id: cfg.id, ambiente: cfg.ambiente, url: cfg.url, estado: cfg.estado };
+}
+
+/**
  * Fuerza recargar la configuración desde la base de datos.
  */
 export async function recargarConfig() {
-  cache = null;
+  cargadaEn = 0;
   return getConfig();
 }
 
@@ -93,4 +121,4 @@ export async function resolverCredenciales({ clientId, clientSecret, subscriptio
   };
 }
 
-export default { getConfig, recargarConfig, resolverCredenciales };
+export default { getConfig, recargarConfig, resolverCredenciales, resumenConfig };

@@ -1,10 +1,34 @@
     import express from 'express';
     import fhirService from '../services/services.js';
     import httpsAgent from '../services/httpsAgent.js';
-    import { getConfig, resolverCredenciales } from '../services/configuracion.js';
+    import { getConfig, resolverCredenciales, resumenConfig, recargarConfig } from '../services/configuracion.js';
 
 
     const router = express.Router();
+
+/**
+ * GET /api/configuracion/actual → muestra qué fila de CONSULTAS_CONF_RDA está usando el servidor
+ * (sin secretos: ID, AMBIENTE, URL, ESTADO)
+ */
+router.get('/configuracion/actual', async (req, res) => {
+  try {
+    res.json(await resumenConfig());
+  } catch (err) {
+    res.status(503).json({ error: 'Configuración no disponible', details: err.message });
+  }
+});
+
+/**
+ * POST /api/configuracion/recargar → vuelve a leer la tabla inmediatamente
+ */
+router.post('/configuracion/recargar', async (req, res) => {
+  try {
+    await recargarConfig();
+    res.json(await resumenConfig());
+  } catch (err) {
+    res.status(503).json({ error: 'Configuración no disponible', details: err.message });
+  }
+});
 
 
 
