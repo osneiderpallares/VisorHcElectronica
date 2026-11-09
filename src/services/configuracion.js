@@ -16,15 +16,15 @@ import fetch from "node-fetch";
  *
  * Variables de entorno opcionales:
  *   CONFIG_URL → endpoint del servicio de configuración (default http://localhost:3002/Configuracion)
- *   AMBIENTE   → se envía como ?ambiente= para elegir la fila de la tabla
+ *   (El AMBIENTE lo decide server.js según la tabla CONFIGURACIONES)
  *   CONFIG_ID  → se envía como ?id=      para elegir la fila de la tabla
  */
 
 const CONFIG_URL = process.env.CONFIG_URL || "http://localhost:3002/Configuracion";
 
 // Tiempo que se reutiliza la configuración antes de volver a consultar la tabla.
-// Así un cambio en CONSULTAS_CONF_RDA se aplica sin reiniciar (default 60 s).
-const CONFIG_TTL_MS = Number(process.env.CONFIG_TTL_MS ?? 60000);
+// Así un cambio en CONSULTAS_CONF_RDA se aplica sin reiniciar (default 10 s).
+const CONFIG_TTL_MS = Number(process.env.CONFIG_TTL_MS ?? 10000);
 
 let cache = null;      // configuración ya cargada
 let cargadaEn = 0;     // momento de la última carga
@@ -32,7 +32,6 @@ let enCurso = null;    // promesa de carga en curso (evita consultas simultánea
 
 function construirUrl() {
   const params = new URLSearchParams();
-  if (process.env.AMBIENTE) params.set("ambiente", process.env.AMBIENTE);
   if (process.env.CONFIG_ID) params.set("id", process.env.CONFIG_ID);
   const qs = params.toString();
   return qs ? `${CONFIG_URL}?${qs}` : CONFIG_URL;
